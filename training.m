@@ -1,0 +1,58 @@
+Dataset = imageDatastore('Dataset', 'IncludeSubfolders', true, 'LabelSource', 'foldernames');
+[Training_Dataset, Validation_Dataset, Testing_Dataset] = splitEachLabel(Dataset, 0.7, 0.15, 0.15);
+
+net = googlenet;
+analyzeNetwork(net)
+
+
+
+Input_Layer_Size = net.Layers(1).InputSize(1:2);
+
+
+Resized_Training_Dataset = augmentedImageDatastore(Input_Layer_Size ,Training_Dataset);
+Resized_Validation_Dataset = augmentedImageDatastore(Input_Layer_Size ,Validation_Dataset);
+Resized_Testing_Dataset = augmentedImageDatastore(Input_Layer_Size ,Testing_Dataset);
+
+
+
+
+
+
+Feature_Learner = net.Layers(142).Name;
+Output_Classifier = net.Layers(144).Name;
+
+Number_of_Classes = numel(categories(Training_Dataset.Labels));
+
+New_Feature_Learner = fullyConnectedLayer(Number_of_Classes, ...
+    'Name', 'Coal Feature Learner', ...
+    'WeightLearnRateFactor', 10, ...
+    'BiasLearnRateFactor', 10);
+
+New_Classifier_Layer = classificationLayer('Name', 'Coal Classifier');
+
+Network_Architecture = layerGraph(net);
+
+New_Network = replaceLayer(Network_Architecture, Feature_Learner, New_Feature_Learner);
+New_Network = replaceLayer(New_Network, Output_Classifier, New_Classifier_Layer);
+
+analyzeNetwork(New_Network)
+
+
+
+
+maxEpochs = 1;
+Minibatch_Size = 4;
+Validation_Frequency = floor(numel(Resized_Training_Dataset.Files)/Minibatch_Size);
+Training_Options = trainingOptions('sgdm', ...
+    'MiniBatchSize', Minibatch_Size, ...
+    'MaxEpochs', maxEpochs, ...
+    'InitialLearnRate', 3e-4, ...
+    'Shuffle', 'every-epoch', ...
+    'ValidationData', Resized_Validation_Dataset, ...
+    'ValidationFrequency', Validation_Frequency, ...
+    'Verbose', false, ...
+    'Plots', 'training-progress');
+
+net = trainNetwork(Resized_Training_Dataset, New_Network, Training_Options);
+
+
